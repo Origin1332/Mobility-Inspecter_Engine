@@ -1,0 +1,13 @@
+.gradle/
+.idea/
+**/build/
+local.properties
+__pycache__/
+.venv/
+data/
+runs/
+models/
+*.pt
+*.onnx
+*.zip
+*.apk
