@@ -5,6 +5,9 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
+import android.util.Size
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -105,6 +108,10 @@ class MainActivity : ComponentActivity() {
                 provider=future.get()
                 provider!!.unbindAll()
                 analysis=ImageAnalysis.Builder()
+                    .setResolutionSelector(ResolutionSelector.Builder()
+                        .setResolutionStrategy(ResolutionStrategy(Size(1280,960),
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
+                        .build())
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setTargetRotation(view.display?.rotation ?: 0)
