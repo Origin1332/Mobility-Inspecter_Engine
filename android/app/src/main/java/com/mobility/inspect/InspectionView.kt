@@ -8,13 +8,15 @@ import kotlin.math.min
 
 class InspectionView(context: Context) : View(context) {
     private var frame: Bitmap? = null
+    private var reviewed = false
     private var boxes: List<Detection> = emptyList()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var scale = 1f
     private var dx = 0f
     private var dy = 0f
     var onSelection: (Detection) -> Unit = {}
-    fun show(bitmap: Bitmap, detections: List<Detection>) {
+    fun show(bitmap: Bitmap, detections: List<Detection>, reviewedBoxes: Boolean = false) {
+        reviewed = reviewedBoxes
         val old = frame
         frame = bitmap
         boxes = detections
@@ -36,7 +38,7 @@ class InspectionView(context: Context) : View(context) {
             paint.color = Color.rgb(65,230,180); paint.style=Paint.Style.STROKE; paint.strokeWidth=3f*resources.displayMetrics.density
             canvas.drawRect(rect,paint)
             paint.style=Paint.Style.FILL; paint.textSize=14f*resources.displayMetrics.scaledDensity
-            val label = "${Parts.names[b.classId]} ${(b.score*100).toInt()}%"
+            val label = Parts.names[b.classId] + if (reviewed) " · 검수" else " ${(b.score*100).toInt()}%"
             val textWidth = paint.measureText(label)
             val x = rect.left.coerceIn(0f,(width-textWidth).coerceAtLeast(0f))
             val y = (rect.top-paint.textSize-6).coerceAtLeast(0f)

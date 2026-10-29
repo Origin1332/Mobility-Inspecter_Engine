@@ -5,7 +5,7 @@ import json
 import shutil
 import zipfile
 from pathlib import Path
-from contract import CLASSES, TASK, SIZES, candidates
+from contract import CLASSES, TASK, SIZES, CLASS_SCHEMA, candidates
 
 def main():
     p=argparse.ArgumentParser()
@@ -62,7 +62,7 @@ def main():
     output.mkdir(parents=True)
     shutil.copyfile(exported,output/'model.onnx')
     manifest={'schema_version':1,'architecture':architecture,'task':TASK,'input_size':a.imgsz,
-              'classes':CLASSES,'sha256':hashlib.sha256(exported.read_bytes()).hexdigest(),
+              'classes':CLASSES,'class_schema':CLASS_SCHEMA,'sha256':hashlib.sha256(exported.read_bytes()).hexdigest(),
               'dataset_sha256':report['source_sha256'],
               'description':'Parts detection only; no fault diagnosis. Field performance unverified.'}
     (output/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')

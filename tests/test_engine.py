@@ -62,8 +62,8 @@ class EngineTests(unittest.TestCase):
         self.assertEqual([candidates(s) for s in (640,960,1280)],[8400,18900,33600])
         with self.assertRaises(ValueError): candidates(641)
     def test_gate(self):
-        b={'map50_95':.5,'recall':[.7]*10}
-        c={'map50_95':.55,'recall':[.71]*10}
+        b={'map50_95':.5,'recall':[.7]*len(CLASSES)}
+        c={'map50_95':.55,'recall':[.71]*len(CLASSES)}
         self.assertTrue(decision(b,c,.03)['accuracy_gate_passed'])
         c['recall'][0]=.6
         self.assertFalse(decision(b,c,.03)['accuracy_gate_passed'])
