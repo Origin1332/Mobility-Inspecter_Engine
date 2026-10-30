@@ -372,7 +372,7 @@ class MainActivity : ComponentActivity() {
         active=false;displayManager.unregisterDisplayListener(displayListener);stopCamera()
         if(::overlay.isInitialized) {
             expireOverlay?.let {overlay.removeCallbacks(it)};expireOverlay=null
-            overlay.clear();if(!paused) clearLiveResult()
+            overlay.clear();if(!paused && !reviewing) clearLiveResult()
         }
         super.onStop()
     }
