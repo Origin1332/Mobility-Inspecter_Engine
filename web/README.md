@@ -6,7 +6,7 @@
 
 완성 실행 팩: ZIP 압축을 풀고 `python serve.py` 실행 → `http://127.0.0.1:8765/` 접속. Python은 정적 파일만 제공하며 이미지 업로드나 서버 추론을 하지 않습니다. 설치 준비 이후 인터넷은 필요하지 않습니다. **index.html을 file://로 직접 열면 모듈·WASM·Worker 제약으로 실행되지 않습니다.**
 
-Android 태블릿: 저장소의 Android 앱에서 **오프라인 웹 검사** 버튼을 누릅니다. CI APK에는 화면/ONNX WASM/PDF 뷰어가 포함됩니다. 처음 한 번 모델 ZIP과 카탈로그 팩 ZIP을 가져오면 IndexedDB에 저장되고 이후 비행기 모드로 실행할 수 있습니다. Android System WebView는 모듈 Worker·WASM SIMD·PDF.js를 지원하는 최신 버전이 필요하며, 실제 기기 성능은 별도 검증해야 합니다. 사진 선택/촬영은 기기 파일 선택기 지원에 따라 달라집니다. 웹 모드는 연속 실시간 카메라 추론이 아니라 사진 단위 추론입니다.
+Android 태블릿: 저장소의 Android 앱에서 **오프라인 웹 검사** 버튼을 누릅니다. CI APK에는 화면/ONNX WASM/PDF 뷰어가 포함됩니다. 완성 실행 팩의 `android-imports/model.zip` 및 `android-imports/catalog.zip`을 태블릿에 복사하세요. 처음 한 번 모델 ZIP과 카탈로그 팩 ZIP을 가져오면 IndexedDB에 저장되고 이후 비행기 모드로 실행할 수 있습니다. Android System WebView는 모듈 Worker·WASM SIMD·PDF.js를 지원하는 최신 버전이 필요하며, 실제 기기 성능은 별도 검증해야 합니다. 사진 선택/촬영은 기기 파일 선택기 지원에 따라 달라집니다. 웹 모드는 연속 실시간 카메라 추론이 아니라 사진 단위 추론입니다.
 
 ## 자료
 

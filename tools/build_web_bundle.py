@@ -1,6 +1,7 @@
 """Add user-owned resources to a built offline web app; never commits source data."""
 import argparse
 import hashlib
+import io
 import json
 import re
 import shutil
@@ -59,6 +60,12 @@ def build(dist, model_zip, catalog, output, samples=(), android_assets=None):
             if p.is_file(): z.write(p, 'web/' + p.relative_to(dist).as_posix())
         z.write(Path(__file__).parent.parent / 'web' / 'serve.py', 'serve.py')
         z.write(Path(__file__).parent.parent / 'web' / 'README.md', 'README.md')
+        z.write(model_zip, 'android-imports/model.zip')
+        catalog_zip = io.BytesIO()
+        with zipfile.ZipFile(catalog_zip, 'w', zipfile.ZIP_DEFLATED) as pack:
+            pack.write(assets_dir / 'catalog.json', 'catalog.json')
+            pack.write(assets_dir / 'catalog.pdf', 'catalog.pdf')
+        z.writestr('android-imports/catalog.zip', catalog_zip.getvalue())
     if android_assets:
         target = Path(android_assets).resolve()
         if target.name != 'web' or target.parent.name != 'assets':
