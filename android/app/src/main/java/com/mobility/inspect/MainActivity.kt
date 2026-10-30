@@ -41,6 +41,9 @@ class MainActivity : ComponentActivity() {
     @Volatile private var reviewing=true
     private var importing=false
     @Volatile private var threshold=.35f
+    private var visibleModel: String?=null
+    private var visibleThreshold=.35f
+    private var capturing=false
     private var lastShown=0L
 
     private val permission=registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -131,7 +134,7 @@ class MainActivity : ComponentActivity() {
                 override fun onStopTrackingTouch(bar: SeekBar?) {}
             })
         })
-        row(button("일시정지/재개") { if(!reviewing) paused=!paused },button("화면 부품 목록") {
+        row(button("장면 고정·검사") { captureInspection() },button("일시정지/재개") { if(!reviewing) paused=!paused },button("화면 부품 목록") {
             if(visibleBoxes.isEmpty()) toast("표시된 부품이 없습니다.") else {
                 val boxes=visibleBoxes.toList()
                 android.app.AlertDialog.Builder(this).setTitle("부품을 선택하세요")
@@ -202,12 +205,12 @@ class MainActivity : ComponentActivity() {
                         var frame: android.graphics.Bitmap?=null
                         try {
                             val ready=CameraFrame.bitmap(image);frame=ready
-                            val model=detector;val boxes=model?.detect(ready,threshold) ?: emptyList()
+                            val model=detector;val usedThreshold=threshold;val boxes=model?.detect(ready,usedThreshold) ?: emptyList()
                             val elapsed=SystemClock.elapsedRealtime()-started
                             runOnUiThread {
                                 try {
                                     if(!isDestroyed && active && !paused && !reviewing) {
-                                        visibleBoxes=boxes;view.show(ready,boxes,false)
+                                        visibleBoxes=boxes;visibleModel=model?.manifestJson;visibleThreshold=usedThreshold;view.show(ready,boxes,false)
                                         val now=SystemClock.elapsedRealtime()
                                         val fps=if(lastShown==0L) 0f else 1000f/(now-lastShown).coerceAtLeast(1)
                                         lastShown=now
@@ -225,6 +228,27 @@ class MainActivity : ComponentActivity() {
                 provider!!.bindToLifecycle(this,CameraSelector.DEFAULT_BACK_CAMERA,analysis!!)
             } catch(e: Exception) {status.text="카메라 시작 실패: ${e.message}"}
         },ContextCompat.getMainExecutor(this))
+    }
+    private fun captureInspection() {
+        if(reviewing || capturing) { toast("실시간 카메라 장면에서 사용하세요.");return }
+        val bitmap=view.snapshot() ?: run { toast("카메라 화면이 준비되지 않았습니다.");return }
+        paused=true;capturing=true
+        val boxes=visibleBoxes.toList()
+        val metadata=org.json.JSONObject().put("width",bitmap.width).put("height",bitmap.height)
+            .put("threshold",visibleThreshold).put("model",visibleModel?.let { org.json.JSONObject(it) } ?: org.json.JSONObject.NULL)
+        val rows=org.json.JSONArray()
+        boxes.forEach { b -> rows.put(org.json.JSONObject().put("class",Parts.ids[b.classId]).put("score",b.score.toDouble())
+            .put("box",org.json.JSONArray(listOf(b.x1.toDouble(),b.y1.toDouble(),b.x2.toDouble(),b.y2.toDouble())))) }
+        metadata.put("detections",rows)
+        worker.execute {
+            try {
+                val folder=File(cacheDir,"inspection-capture").apply { mkdirs() }
+                File(folder,"current.jpg").outputStream().use { require(bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG,95,it)) }
+                File(folder,"current.json").writeText(metadata.toString())
+                runOnUiThread { capturing=false;if(!isDestroyed) startActivity(android.content.Intent(this,WebInspectionActivity::class.java).putExtra("capture",true)) }
+            } catch(e: Exception) {runOnUiThread { capturing=false;status.text="장면 저장 실패: ${e.message}" }}
+            finally {bitmap.recycle()}
+        }
     }
     override fun onStart() {super.onStart();active=true;lastShown=0L}
     override fun onStop() {active=false;super.onStop()}

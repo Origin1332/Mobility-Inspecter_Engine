@@ -40,3 +40,7 @@ python tools/build_web_bundle.py --model-zip /path/model.zip --catalog /path/cat
 `python -m unittest discover -s tests -v`: 기존 데이터·카탈로그 회귀 검사.
 
 CPU/WASM 추론이므로 모델 초기화·추론 시간은 태블릿에 따라 달라집니다. 브라우저 데스크톱 검증은 Android 실기기 검증을 대신하지 않습니다. 결함 진단 모델이 아니며, 5개 학습 클래스 외의 부품 탐지 성능을 주장하지 않습니다.
+
+## 검사 세션 (v0.4)
+
+사진·AI 원본·수정 박스·선택 품번·메모를 **검사 저장**하고 **저장된 검사**에서 다시 열 수 있습니다. Android **장면 고정·검사**도 이 화면으로 연결됩니다. JSON은 스키마 2이며 사진을 제외합니다. [사용법·저장 규칙·검증 한계](../docs/INSPECTION_SESSIONS.md)를 참고하세요.

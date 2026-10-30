@@ -63,6 +63,11 @@ class WebInspectionActivity : ComponentActivity() {
             }
             try { WebResourceResponse(mime, null, assets.open(path)) }
             catch (_: Exception) { WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0))) }
+        }).addPathHandler("/capture/", WebViewAssetLoader.PathHandler { path ->
+            if (!intent.getBooleanExtra("capture",false) || path !in setOf("current.jpg","current.json")) return@PathHandler blocked()
+            try { WebResourceResponse(if(path.endsWith("jpg")) "image/jpeg" else "application/json",null,
+                java.io.File(cacheDir,"inspection-capture/$path").inputStream()) }
+            catch (_: Exception) { blocked() }
         }).build()
         fun response(url: Uri): WebResourceResponse =
             if (url.scheme == "https" && url.host == WebViewAssetLoader.DEFAULT_DOMAIN)
@@ -88,6 +93,14 @@ class WebInspectionActivity : ComponentActivity() {
             })
         }
         web.webChromeClient = object : WebChromeClient() {
+            override fun onJsConfirm(view: WebView, url: String, message: String, result: android.webkit.JsResult): Boolean {
+                android.app.AlertDialog.Builder(this@WebInspectionActivity).setMessage(message)
+                    .setPositiveButton("계속") { _,_ -> result.confirm() }
+                    .setNegativeButton("취소") { _,_ -> result.cancel() }
+                    .setOnCancelListener { result.cancel() }.show()
+                return true
+            }
+
             override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
                 picker?.onReceiveValue(null); picker = callback
                 val image = params.acceptTypes.any { it.startsWith("image/") }
@@ -97,7 +110,9 @@ class WebInspectionActivity : ComponentActivity() {
         }
         web.addJavascriptInterface(object {
             @JavascriptInterface fun saveJson(text: String) {
-                if (text.length > 2 * 1024 * 1024) return
+                if (text.length > 2 * 1024 * 1024) {
+                    runOnUiThread { Toast.makeText(this@WebInspectionActivity,"JSON 출력은 2MiB 이하만 지원합니다. 기기 내부 검사 저장을 사용하세요.",Toast.LENGTH_LONG).show() };return
+                }
                 try { org.json.JSONObject(text) } catch (_: Exception) { return }
                 runOnUiThread {
                     if (pendingJson == null && !isDestroyed) {
@@ -112,9 +127,16 @@ class WebInspectionActivity : ComponentActivity() {
         }
         setContentView(web)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() { finish() }
+            override fun handleOnBackPressed() {
+                web.evaluateJavascript("Boolean(window.inspectionDirty && window.inspectionDirty())") { result ->
+                    if(result == "true") android.app.AlertDialog.Builder(this@WebInspectionActivity)
+                        .setMessage("저장하지 않은 변경 사항을 버리고 나갈까요?")
+                        .setPositiveButton("나가기") { _,_ -> finish() }.setNegativeButton("계속 검사",null).show()
+                    else finish()
+                }
+            }
         })
-        web.loadUrl("https://appassets.androidplatform.net/assets/web/index.html")
+        web.loadUrl("https://appassets.androidplatform.net/assets/web/index.html" + if(intent.getBooleanExtra("capture",false)) "?capture=1" else "")
     }
     override fun onDestroy() {
         picker?.onReceiveValue(null); picker = null

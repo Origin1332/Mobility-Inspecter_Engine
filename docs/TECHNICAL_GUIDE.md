@@ -1,6 +1,6 @@
 # 기술 구조 및 사용 가이드
 
-기준일: 2026-10-31 · 앱 버전: 0.3.0 · 코드 기준: `60fde4bcc887129bdc4e02a02a2558d04610a996`
+기준일: 2026-10-31 · 앱 버전: 0.4.0 · 기반 구조 기준: `60fde4bcc887129bdc4e02a02a2558d04610a996` · 검사 세션은 [0.4 가이드](INSPECTION_SESSIONS.md) 참고
 
 2023년형 일반 렉스턴 스포츠 엔진룸의 부품을 식별하고, 선택한 부품에 연결된 카탈로그 품번 후보와 관련 부속을 찾는 오프라인 애플리케이션이다. 부품 탐지 모델이며 고장·결함 진단이나 장착 적합성 확정 기능은 아니다.
 
@@ -20,7 +20,7 @@
 |---|---|
 | Android | Kotlin 2.0.21, Android Gradle Plugin 8.7.3, Java 17, CI Gradle 8.9 |
 | Android 대상 | minSdk 26(Android 8.0), compile/targetSdk 35, `arm64-v8a` / `x86_64` |
-| 앱 식별 | `com.mobility.engine`, versionCode 3, versionName 0.3.0 |
+| 앱 식별 | `com.mobility.engine`, versionCode 4, versionName 0.4.0 |
 | 카메라 | CameraX 1.4.1, Camera2 백엔드 |
 | 네이티브 추론 | ONNX Runtime Android 1.20.0 |
 | 웹 화면 | HTML/CSS/JavaScript ES modules, 별도 UI 프레임워크 없음 |
@@ -117,7 +117,7 @@ python serve.py
 
 ### 검사 JSON
 
-웹 내보내기에는 스키마 버전, 검사 시각, 이미지 이름/크기, 모델·카탈로그 SHA-256, 임계값/NMS 기준, 표시 중인 탐지와 후보 행 ID, `fitment_verified:false`가 포함된다. 현재 출력은 원본 사진이나 PDF를 포함하는 전체 백업이 아니며, 검사 이력 관리·불러오기 시스템으로 구현된 것도 아니다. 앱 버전은 현재 JSON 필드에 포함되지 않는다.
+v0.4는 검사 세션을 기기에 사진과 함께 저장하고 다시 연다. JSON 내보내기는 스키마 2로 AI 원본과 사용자 수정 결과, 선택 후보, 메모, 모델 정보와 앱 버전을 포함한다. 사진은 JSON에서 제외한다. 상세 규격과 제한은 [검사 세션 가이드](INSPECTION_SESSIONS.md)를 참고한다.
 
 ## 6. 개발 환경과 빌드
 

@@ -11,10 +11,11 @@ import java.security.MessageDigest
 class Detector(directory: File) : Closeable {
     private val env = OrtEnvironment.getEnvironment()
     private val session: OrtSession
+    val manifestJson: String = File(directory,"manifest.json").readText()
     val size: Int
     private val classIds: IntArray
     init {
-        val manifest = JSONObject(File(directory,"manifest.json").readText())
+        val manifest = JSONObject(manifestJson)
         require(manifest.getInt("schema_version") == 1 && manifest.getString("architecture") in setOf("yolov8", "yolo11")) { "지원하지 않는 모델 패키지" }
         size = manifest.getInt("input_size")
         require(size in setOf(640, 960, 1280)) { "640/960/1280 입력 모델이 필요합니다" }

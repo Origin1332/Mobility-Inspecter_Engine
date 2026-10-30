@@ -23,6 +23,7 @@ class InspectionView(context: Context) : View(context) {
         old?.recycle()
         invalidate()
     }
+    fun snapshot(): Bitmap? = frame?.copy(Bitmap.Config.ARGB_8888, false)
     fun clear() { frame?.recycle(); frame=null; boxes=emptyList(); invalidate() }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)

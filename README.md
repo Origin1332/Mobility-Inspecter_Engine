@@ -6,7 +6,7 @@
 
 **[현재 구조·기술 스택·구동 방식·사용법 전체 가이드](docs/TECHNICAL_GUIDE.md)**
 
-현재 앱은 **0.3.0 / `com.mobility.engine`**, Android 8.0 이상, `arm64-v8a`·`x86_64` 대상입니다. 갤럭시 탭 Active 1세대는 현재 APK와 호환되지 않습니다.
+현재 앱은 **0.4.0 / `com.mobility.engine`**, Android 8.0 이상, `arm64-v8a`·`x86_64` 대상입니다. 갤럭시 탭 Active 1세대는 현재 APK와 호환되지 않습니다.
 
 | 모드 | 기능 |
 |---|---|
@@ -21,7 +21,10 @@
 1. [GitHub Actions](https://github.com/Origin1332/Mobility-Inspecter_Engine/actions)의 성공한 실행에서 `mobility-inspecter-engine-debug`를 내려받아 APK를 설치합니다.
 2. **오프라인 웹 검사**에서 별도 제공 실행 팩의 `android-imports/model.zip`과 `android-imports/catalog.zip`을 가져옵니다.
 3. **사진 선택 → 부품 탐지 → 박스/목록 선택 → 카탈로그 확인** 순서로 사용합니다.
-4. **검사 기록 내보내기**로 JSON을 저장합니다.
+4. 박스를 수정하거나 제외하고 품번 후보와 메모를 선택한 뒤 **검사 저장**을 누릅니다. **저장된 검사**에서 사진과 결과를 다시 엽니다.
+5. **검사 기록 내보내기**로 사진을 제외한 JSON을 출력합니다.
+
+실시간 화면의 **장면 고정·검사**로 같은 편집 흐름에 진입할 수 있습니다. 자세한 사용법과 데이터 규격: [검사 세션 가이드](docs/INSPECTION_SESSIONS.md).
 
 네이티브 모드는 **검수 팩 ZIP**과 **YOLO 모델 ZIP**에서 별도로 자료를 가져옵니다. 두 모드의 자료 저장소는 공유되지 않습니다. 웹은 사진 단위 검사이며 연속 카메라 모드는 Android 메인 화면에 있습니다.
 
