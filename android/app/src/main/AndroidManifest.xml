@@ -4,6 +4,7 @@
     <application android:label="Mobility Inspecter Engine" android:allowBackup="false"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:supportsRtl="true">
+        <activity android:name=".WebInspectionActivity" android:exported="false"/>
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

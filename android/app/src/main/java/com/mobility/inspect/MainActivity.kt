@@ -113,7 +113,9 @@ class MainActivity : ComponentActivity() {
         partsButton=button("카탈로그 검색") {
             if(!importing) bundle?.let { CatalogDialog.show(this,it) } ?: toast("검수 팩을 먼저 가져오세요.")
         }
-        row(bundleButton,modelButton,partsButton)
+        row(bundleButton,modelButton,partsButton,button("오프라인 웹 검사") {
+            startActivity(android.content.Intent(this, WebInspectionActivity::class.java))
+        })
         row(button("검수 사진") { if(!importing) showReview() },button("실시간 카메라") { if(!importing) cameraMode() },
             button("이전 사진") { if(!importing && reviewing && reviewIndex>0) {reviewIndex--;showReview()} },
             button("다음 사진") { if(!importing && reviewing && reviewIndex+1<(bundle?.images?.size ?: 0)) {reviewIndex++;showReview()} })

@@ -6,8 +6,8 @@ android {
         applicationId = "com.mobility.engine"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
@@ -15,6 +15,7 @@ android {
     buildTypes { release { isMinifyEnabled = false } }
 }
 dependencies {
+    implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.camera:camera-camera2:1.4.1")

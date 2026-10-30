@@ -11,3 +11,8 @@ models/
 *.onnx
 *.zip
 *.apk
+web/node_modules/
+web/dist/
+web/local-assets/
+android/app/src/main/assets/web/
+.openai/
