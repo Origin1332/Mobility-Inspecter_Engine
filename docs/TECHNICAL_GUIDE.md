@@ -1,6 +1,6 @@
 # 기술 구조 및 사용 가이드
 
-기준일: 2026-10-31 · 앱 버전: 0.4.0 · 기반 구조 기준: `60fde4bcc887129bdc4e02a02a2558d04610a996` · 검사 세션은 [0.4 가이드](INSPECTION_SESSIONS.md) 참고
+기준일: 2026-10-31 · 앱 버전: 0.5.0 · 기반 구조 기준: `60fde4bcc887129bdc4e02a02a2558d04610a996` · 검사 세션은 [0.4 가이드](INSPECTION_SESSIONS.md) 참고
 
 2023년형 일반 렉스턴 스포츠 엔진룸의 부품을 식별하고, 선택한 부품에 연결된 카탈로그 품번 후보와 관련 부속을 찾는 오프라인 애플리케이션이다. 부품 탐지 모델이며 고장·결함 진단이나 장착 적합성 확정 기능은 아니다.
 
@@ -20,8 +20,8 @@
 |---|---|
 | Android | Kotlin 2.0.21, Android Gradle Plugin 8.7.3, Java 17, CI Gradle 8.9 |
 | Android 대상 | minSdk 26(Android 8.0), compile/targetSdk 35, `arm64-v8a` / `x86_64` |
-| 앱 식별 | `com.mobility.engine`, versionCode 4, versionName 0.4.0 |
-| 카메라 | CameraX 1.4.1, Camera2 백엔드 |
+| 앱 식별 | `com.mobility.engine`, versionCode 5, versionName 0.5.0 |
+| 카메라 | CameraX 1.4.1, Camera2 백엔드, PreviewView |
 | 네이티브 추론 | ONNX Runtime Android 1.20.0 |
 | 웹 화면 | HTML/CSS/JavaScript ES modules, 별도 UI 프레임워크 없음 |
 | 웹 추론 | ONNX Runtime Web 1.20.1, WASM 단일 스레드, module Worker |
@@ -71,7 +71,7 @@ Galaxy Tab Active 1세대(SM-T360/SM-T365)는 제공된 사양상 Android 4.4~5.
 
 ### 실시간 카메라
 
-CameraX의 `STRATEGY_KEEP_ONLY_LATEST`와 처리 중 상태 제어를 사용한다. 처리하지 못한 프레임을 계속 쌓지 않고 최신 프레임 중심으로 추론한다. 실제 탐지 갱신 빈도는 모델·기기·발열에 따라 달라지며 보장 FPS는 없다. 네이티브 임계값 범위는 0.10~0.95, 기본값은 0.35다.
+v0.5부터 `PreviewView`의 카메라 미리보기와 `ImageAnalysis` 추론을 분리한다. 공통 ViewPort와 CameraX 좌표 변환으로 별도 오버레이를 배치한다. CameraX의 `STRATEGY_KEEP_ONLY_LATEST`와 처리 중 상태 제어를 사용한다. 처리하지 못한 프레임을 계속 쌓지 않고 최신 프레임 중심으로 추론한다. 실제 탐지 갱신 빈도는 모델·기기·발열에 따라 달라지며 보장 FPS는 없다. 화면의 갱신 횟수는 분석 결과 빈도이며 미리보기 FPS가 아니다. [실시간 처리 상세](LIVE_PREVIEW.md)를 참고한다. 네이티브 임계값 범위는 0.10~0.95, 기본값은 0.35다.
 
 ### 카탈로그 연결
 

@@ -3,6 +3,15 @@ package com.mobility.engine
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import android.graphics.RectF
+import android.view.View
+import android.hardware.display.DisplayManager
+import android.os.Handler
+import android.os.Looper
+import androidx.camera.view.PreviewView
+import androidx.camera.view.transform.ImageProxyTransformFactory
+import androidx.camera.view.transform.CoordinateTransform
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Size
@@ -18,15 +27,20 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import java.io.File
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
 
+@androidx.annotation.OptIn(markerClass = [androidx.camera.view.TransformExperimental::class])
 class MainActivity : ComponentActivity() {
     private val worker=Executors.newSingleThreadExecutor()
-    private val pending=AtomicBoolean(false)
+    private val frameGate=FrameGate()
     private var detector: Detector?=null // Worker only.
     private var provider: ProcessCameraProvider?=null
     private var analysis: ImageAnalysis?=null
     private lateinit var view: InspectionView
+    private lateinit var preview: PreviewView
+    private lateinit var overlay: DetectionOverlay
+    private data class AnalyzedFrame(val bitmap: Bitmap,val boxes: List<Detection>,val model: String?,val threshold: Float,val started: Long)
+    private var latestFrame: AnalyzedFrame?=null
+    private var expireOverlay: Runnable?=null
     private lateinit var status: TextView
     private lateinit var details: TextView
     private lateinit var imageLabel: TextView
@@ -41,10 +55,18 @@ class MainActivity : ComponentActivity() {
     @Volatile private var reviewing=true
     private var importing=false
     @Volatile private var threshold=.35f
-    private var visibleModel: String?=null
-    private var visibleThreshold=.35f
     private var capturing=false
     private var lastShown=0L
+    private var boundRotation=-1
+    private val displayManager by lazy { getSystemService(DisplayManager::class.java) }
+    private val displayListener=object: DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) {
+            if(::preview.isInitialized && preview.display?.displayId==displayId &&
+                preview.display?.rotation!=boundRotation && active && !reviewing && !paused) startCamera()
+        }
+    }
 
     private val permission=registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if(granted && !reviewing) startCamera()
@@ -52,6 +74,8 @@ class MainActivity : ComponentActivity() {
     }
     private val modelPicker=registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if(uri!=null) {
+            frameGate.stop()
+            if(!reviewing && !paused) clearLiveResult()
             modelButton.isEnabled=false
             status.text="모델 검증 중…"
             worker.execute {
@@ -64,16 +88,16 @@ class MainActivity : ComponentActivity() {
                     }
                     detector?.close();detector=next
                     oldFolder?.takeIf { it!=folder }?.deleteRecursively()
-                    runOnUiThread { status.text="모델 준비 완료 · 실시간 버튼으로 시작";modelButton.isEnabled=true }
+                    runOnUiThread { status.text="모델 준비 완료 · 실시간 버튼으로 시작";modelButton.isEnabled=true;if(active && !reviewing && !paused) startCamera() }
                 } catch(e: Exception) {
-                    runOnUiThread { status.text="모델 가져오기 실패: ${e.message}";modelButton.isEnabled=true }
+                    runOnUiThread { status.text="모델 가져오기 실패: ${e.message}";modelButton.isEnabled=true;if(active && !reviewing && !paused) startCamera() }
                 }
             }
         }
     }
     private val bundlePicker=registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if(uri!=null) {
-            reviewing=true;provider?.unbindAll();importing=true
+            reviewing=true;stopCamera();clearLiveResult();preview.visibility=View.GONE;overlay.visibility=View.GONE;view.visibility=View.VISIBLE;importing=true
             bundleButton.isEnabled=false;partsButton.isEnabled=false
             status.text="검수 팩과 카탈로그 확인 중…"
             worker.execute {
@@ -134,15 +158,28 @@ class MainActivity : ComponentActivity() {
                 override fun onStopTrackingTouch(bar: SeekBar?) {}
             })
         })
-        row(button("장면 고정·검사") { captureInspection() },button("일시정지/재개") { if(!reviewing) paused=!paused },button("화면 부품 목록") {
+        row(button("분석 장면 고정·검사") { captureInspection() },button("분석 장면 일시정지/재개") { if(!reviewing && !capturing) togglePause() },button("화면 부품 목록") {
             if(visibleBoxes.isEmpty()) toast("표시된 부품이 없습니다.") else {
                 val boxes=visibleBoxes.toList()
                 android.app.AlertDialog.Builder(this).setTitle("부품을 선택하세요")
                     .setItems(boxes.mapIndexed { i,b->"${i+1}. ${Parts.names[b.classId]}" }.toTypedArray()) { _,i->select(boxes[i]) }.show()
             }
         })
+        preview=PreviewView(this).apply {
+            implementationMode=PreviewView.ImplementationMode.COMPATIBLE
+            scaleType=PreviewView.ScaleType.FIT_CENTER
+            visibility=View.GONE
+        }
+        overlay=DetectionOverlay(this).apply {visibility=View.GONE;onSelection={ select(it) }}
         view=InspectionView(this);view.onSelection={ select(it) }
-        root.addView(view,LinearLayout.LayoutParams(-1,0,1f))
+        val cameraArea=FrameLayout(this)
+        cameraArea.addView(preview,FrameLayout.LayoutParams(-1,-1))
+        cameraArea.addView(overlay,FrameLayout.LayoutParams(-1,-1))
+        cameraArea.addView(view,FrameLayout.LayoutParams(-1,-1))
+        root.addView(cameraArea,LinearLayout.LayoutParams(-1,0,1f))
+        preview.addOnLayoutChangeListener { _,l,t,r,b,ol,ot,or,ob ->
+            if(r-l>0 && b-t>0 && (r-l!=or-ol || b-t!=ob-ot) && active && !reviewing && !paused) startCamera()
+        }
         details=label("박스 또는 부품 목록을 누르면 관련 품번·부속품·원문 도면을 찾습니다.")
         details.maxLines=4;root.addView(details)
         setContentView(root)
@@ -169,7 +206,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun showReview() {
         val pack=bundle ?: run { toast("검수 팩 ZIP을 먼저 가져오세요.");return }
-        reviewing=true;provider?.unbindAll();view.clear();visibleBoxes=emptyList()
+        reviewing=true;paused=false;stopCamera();clearLiveResult();preview.visibility=View.GONE;overlay.visibility=View.GONE;view.visibility=View.VISIBLE;view.clear();visibleBoxes=emptyList()
         reviewIndex=reviewIndex.coerceIn(0,pack.images.lastIndex)
         val item=pack.images[reviewIndex]
         val bitmap=BitmapFactory.decodeFile(File(pack.folder,"images/"+item.fileName).absolutePath)
@@ -180,62 +217,138 @@ class MainActivity : ComponentActivity() {
         imageLabel.text="${reviewIndex+1}/${pack.images.size} · ${item.fileName} · ${item.width}×${item.height}"
         details.text="박스를 누르거나 화면 부품 목록에서 선택하세요. 라벨이 없는 부품은 없다고 판정하지 않습니다."
     }
+    private fun clearLiveResult() {
+        expireOverlay?.let {overlay.removeCallbacks(it)};expireOverlay=null
+        overlay.clear();visibleBoxes=emptyList()
+        latestFrame?.bitmap?.recycle();latestFrame=null;lastShown=0L
+    }
+    private fun stopCamera() {
+        frameGate.stop();analysis?.clearAnalyzer();provider?.unbindAll()
+    }
     private fun cameraMode() {
-        reviewing=false;paused=false;lastShown=0L;visibleBoxes=emptyList();view.clear()
-        imageLabel.text="실시간 카메라 · 학습된 YOLO 모델 필요"
+        if(capturing) return
+        reviewing=false;paused=false;view.clear();clearLiveResult()
+        view.visibility=View.GONE;preview.visibility=View.VISIBLE;overlay.visibility=View.VISIBLE
+        imageLabel.text="실시간 미리보기 · 박스는 최근 분석 결과 · 고정은 마지막 분석 사진 기준"
         if(ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED) startCamera()
         else permission.launch(Manifest.permission.CAMERA)
     }
+    private fun togglePause() {
+        if(paused) {cameraMode();return}
+        freezeAnalyzedFrame()
+    }
+    private fun freezeAnalyzedFrame(): Boolean {
+        val frame=latestFrame ?: run {toast("분석 프레임이 아직 없습니다. 잠시 기다려 주세요.");return false}
+        val frozen=frame.bitmap.copy(Bitmap.Config.ARGB_8888,false) ?: return false
+        paused=true;stopCamera()
+        expireOverlay?.let {overlay.removeCallbacks(it)};expireOverlay=null
+        overlay.clear();overlay.visibility=View.GONE;preview.visibility=View.GONE;view.visibility=View.VISIBLE
+        visibleBoxes=frame.boxes;view.show(frozen,frame.boxes,false)
+        val age=SystemClock.elapsedRealtime()-frame.started
+        imageLabel.text="고정된 분석 사진 · %.1f초 전 프레임 · 사진과 박스가 같은 프레임입니다.".format(age/1000.0)
+        status.text="분석 장면 일시정지 · 재개 또는 검사 편집으로 진행하세요."
+        return true
+    }
     private fun startCamera() {
+        if(!active || reviewing || paused || isDestroyed || preview.width==0 || preview.height==0) return
+        if(ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED) return
+        val token=frameGate.start()
+        clearLiveResult()
         val future=ProcessCameraProvider.getInstance(this)
         future.addListener({
-            if(isDestroyed || reviewing) return@addListener
+            if(!frameGate.accepts(token) || !active || reviewing || paused || isDestroyed) return@addListener
             try {
                 provider=future.get();provider!!.unbindAll()
-                analysis=ImageAnalysis.Builder()
+                val rotation=preview.display?.rotation ?: 0
+                boundRotation=rotation
+                val viewport=preview.viewPort ?: error("미리보기 영역이 준비되지 않았습니다.")
+                val cameraPreview=Preview.Builder().setTargetRotation(rotation).build()
+                cameraPreview.setSurfaceProvider(preview.surfaceProvider)
+                val analyzer=ImageAnalysis.Builder()
                     .setResolutionSelector(ResolutionSelector.Builder().setResolutionStrategy(
                         ResolutionStrategy(Size(1280,960),ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)).build())
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .setTargetRotation(view.display?.rotation ?: 0).build()
-                analysis!!.setAnalyzer(worker) { image ->
+                    .setTargetRotation(rotation).build()
+                analysis=analyzer
+                val transformFactory=ImageProxyTransformFactory().apply {
+                    isUsingCropRect=true;isUsingRotationDegrees=true
+                }
+                analyzer.setAnalyzer(worker) { image ->
+                    var imageClosed=false
                     try {
-                        if(!active || paused || reviewing || !pending.compareAndSet(false,true)) return@setAnalyzer
+                        if(!active || paused || reviewing || !frameGate.acquire(token)) return@setAnalyzer
                         val started=SystemClock.elapsedRealtime()
-                        var frame: android.graphics.Bitmap?=null
+                        var bitmap: Bitmap?=null
                         try {
-                            val ready=CameraFrame.bitmap(image);frame=ready
-                            val model=detector;val usedThreshold=threshold;val boxes=model?.detect(ready,usedThreshold) ?: emptyList()
+                            val transform=transformFactory.getOutputTransform(image)
+                            val ready=CameraFrame.bitmap(image);bitmap=ready
+                            image.close();imageClosed=true
+                            val model=detector;val usedThreshold=threshold
+                            val boxes=model?.detect(ready,usedThreshold) ?: emptyList()
+                            val modelJson=model?.manifestJson
                             val elapsed=SystemClock.elapsedRealtime()-started
                             runOnUiThread {
                                 try {
-                                    if(!isDestroyed && active && !paused && !reviewing) {
-                                        visibleBoxes=boxes;visibleModel=model?.manifestJson;visibleThreshold=usedThreshold;view.show(ready,boxes,false)
+                                    if(!isDestroyed && active && !paused && !reviewing && frameGate.accepts(token)) {
+                                        latestFrame?.bitmap?.recycle()
+                                        val result=AnalyzedFrame(ready,boxes,modelJson,usedThreshold,started)
+                                        latestFrame=result
+                                        expireOverlay?.let {overlay.removeCallbacks(it)}
+                                        overlay.clear();visibleBoxes=emptyList()
                                         val now=SystemClock.elapsedRealtime()
-                                        val fps=if(lastShown==0L) 0f else 1000f/(now-lastShown).coerceAtLeast(1)
+                                        val hz=if(lastShown==0L) 0f else 1000f/(now-lastShown).coerceAtLeast(1)
                                         lastShown=now
-                                        status.text=if(model==null) "카메라 준비 · 학습된 모델 ZIP을 가져오세요." else
-                                            "${boxes.size}개 부품 · ${elapsed}ms · %.1f FPS".format(fps)
+                                        val target=preview.outputTransform
+                                        if(target!=null && FrameGate.fresh(now,started)) {
+                                            val mapping=CoordinateTransform(transform,target)
+                                            overlay.show(boxes.map { box ->
+                                                val rect=RectF(box.x1,box.y1,box.x2,box.y2);mapping.mapRect(rect);box to rect
+                                            })
+                                            visibleBoxes=boxes
+                                            expireOverlay=Runnable {
+                                                if(latestFrame===result && !paused && !reviewing) {
+                                                    overlay.clear();visibleBoxes=emptyList()
+                                                    status.text="박스 갱신 대기 · 오래된 결과를 숨겼습니다. 분석 장면 고정으로 확인하세요."
+                                                }
+                                            }.also {overlay.postDelayed(it,(FrameGate.MAX_OVERLAY_AGE_MS-(now-started)).coerceAtLeast(1))}
+                                        }
+                                        status.text=if(model==null) "미리보기 실행 중 · 학습된 모델 ZIP을 가져오세요." else
+                                            "${boxes.size}개 탐지 · 분석 ${elapsed}ms · 갱신 %.1f회/초".format(hz)+
+                                                if(!FrameGate.fresh(now,started)) " · 지연된 박스 숨김 / 장면 고정 권장" else if(target==null) " · 좌표 준비 중" else ""
                                     } else ready.recycle()
-                                } finally { pending.set(false) }
+                                } catch(e: Exception) {
+                                    overlay.clear();visibleBoxes=emptyList()
+                                    status.text="박스 표시 실패: ${e.message} · 미리보기는 계속됩니다."
+                                } finally {frameGate.release()}
                             }
                         } catch(e: Exception) {
-                            frame?.recycle();pending.set(false);paused=true
-                            runOnUiThread {status.text="분석 중지: ${e.message}"}
+                            bitmap?.recycle();frameGate.release()
+                            runOnUiThread {
+                                if(frameGate.accepts(token)) {
+                                    frameGate.stop();overlay.clear();visibleBoxes=emptyList()
+                                    status.text="분석 중지: ${e.message} · 미리보기 유지 / 실시간 카메라로 재시도"
+                                }
+                            }
                         }
-                    } finally {image.close()}
+                    } finally {if(!imageClosed) image.close()}
                 }
-                provider!!.bindToLifecycle(this,CameraSelector.DEFAULT_BACK_CAMERA,analysis!!)
-            } catch(e: Exception) {status.text="카메라 시작 실패: ${e.message}"}
+                provider!!.bindToLifecycle(this,CameraSelector.DEFAULT_BACK_CAMERA,
+                    UseCaseGroup.Builder().setViewPort(viewport).addUseCase(cameraPreview).addUseCase(analyzer).build())
+            } catch(e: Exception) {
+                frameGate.stop();status.text="카메라 시작 실패: ${e.message}"
+            }
         },ContextCompat.getMainExecutor(this))
     }
     private fun captureInspection() {
         if(reviewing || capturing) { toast("실시간 카메라 장면에서 사용하세요.");return }
+        if(!paused && !freezeAnalyzedFrame()) return
+        val frame=latestFrame ?: run {toast("분석 프레임이 없습니다.");return}
         val bitmap=view.snapshot() ?: run { toast("카메라 화면이 준비되지 않았습니다.");return }
-        paused=true;capturing=true
-        val boxes=visibleBoxes.toList()
+        capturing=true
+        val boxes=frame.boxes
         val metadata=org.json.JSONObject().put("width",bitmap.width).put("height",bitmap.height)
-            .put("threshold",visibleThreshold).put("model",visibleModel?.let { org.json.JSONObject(it) } ?: org.json.JSONObject.NULL)
+            .put("frame_age_ms",SystemClock.elapsedRealtime()-frame.started).put("threshold",frame.threshold).put("model",frame.model?.let { org.json.JSONObject(it) } ?: org.json.JSONObject.NULL)
         val rows=org.json.JSONArray()
         boxes.forEach { b -> rows.put(org.json.JSONObject().put("class",Parts.ids[b.classId]).put("score",b.score.toDouble())
             .put("box",org.json.JSONArray(listOf(b.x1.toDouble(),b.y1.toDouble(),b.x2.toDouble(),b.y2.toDouble())))) }
@@ -250,10 +363,21 @@ class MainActivity : ComponentActivity() {
             finally {bitmap.recycle()}
         }
     }
-    override fun onStart() {super.onStart();active=true;lastShown=0L}
-    override fun onStop() {active=false;super.onStop()}
+    override fun onStart() {
+        super.onStart();active=true;lastShown=0L
+        displayManager.registerDisplayListener(displayListener,Handler(Looper.getMainLooper()))
+        if(::preview.isInitialized && !reviewing && !paused) preview.post {startCamera()}
+    }
+    override fun onStop() {
+        active=false;displayManager.unregisterDisplayListener(displayListener);stopCamera()
+        if(::overlay.isInitialized) {
+            expireOverlay?.let {overlay.removeCallbacks(it)};expireOverlay=null
+            overlay.clear();if(!paused) clearLiveResult()
+        }
+        super.onStop()
+    }
     override fun onDestroy() {
-        active=false;analysis?.clearAnalyzer();provider?.unbindAll()
+        active=false;stopCamera();clearLiveResult()
         worker.execute {detector?.close();detector=null};worker.shutdown();view.clear()
         super.onDestroy()
     }
